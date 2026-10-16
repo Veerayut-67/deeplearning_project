@@ -1,0 +1,30 @@
+{
+  "categories": [
+    "Bills",
+    "Entertainment",
+    "Food/Drink",
+    "Shopping",
+    "Transport"
+  ],
+  "moods": [
+    "Boredom",
+    "Happiness/Reward",
+    "Impulse/Peer",
+    "Necessity",
+    "Stress"
+  ],
+  "cat2idx": {
+    "Bills": 0,
+    "Entertainment": 1,
+    "Food/Drink": 2,
+    "Shopping": 3,
+    "Transport": 4
+  },
+  "mood2idx": {
+    "Boredom": 0,
+    "Happiness/Reward": 1,
+    "Impulse/Peer": 2,
+    "Necessity": 3,
+    "Stress": 4
+  }
+}

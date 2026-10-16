@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial & Mood Intelligence Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="bg-slate-100 min-h-screen p-6">
+    <div class="max-w-6xl mx-auto space-y-6">
+
+        <!-- Header -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-800">🧠 Personal Financial & Mood Analyst</h1>
+                <p class="text-slate-500 text-sm">ระบบวิเคราะห์การใช้เงินและสาเหตุทางอารมณ์ด้วย PyTorch BiLSTM + OCR</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="/export-csv/"
+                    class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition flex items-center gap-2 text-sm">
+                    📥 Export CSV Report
+                </a>
+                <form action="/clear-data/" method="POST" onsubmit="return confirm('คุณต้องการลบข้อมูลทั้งหมดใช่หรือไม่?');" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit"
+                        class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition text-sm">
+                        🗑️ ลบข้อมูลทั้งหมด
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Metric Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-green-500">
+                <p class="text-sm font-medium text-slate-500">💵 รายรับรวม (Income)</p>
+                <p class="text-2xl font-bold text-green-600 mt-1">+{{ total_inc|default:0|floatformat:2 }} THB</p>
+            </div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-red-500">
+                <p class="text-sm font-medium text-slate-500">💸 รายจ่ายรวม (Expense)</p>
+                <p class="text-2xl font-bold text-red-600 mt-1">-{{ total_exp|default:0|floatformat:2 }} THB</p>
+            </div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-indigo-500">
+                <p class="text-sm font-medium text-slate-500">⚖️ คงเหลือสุทธิ (Net Balance)</p>
+                <p class="text-2xl font-bold text-indigo-600 mt-1">{{ net_balance|default:0|floatformat:2 }} THB</p>
+            </div>
+        </div>
+
+        <!-- Line Chart: แนวโน้มการใช้จ่าย 7 วันล่าสุด -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 class="text-lg font-bold text-slate-700 mb-4">📈 แนวโน้มการใช้จ่าย 7 วันล่าสุด</h2>
+            <div class="relative w-full h-64">
+                <canvas id="expenseChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Summary Charts Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-700 mb-4 text-center">📊 รายจ่ายแยกตามหมวดหมู่</h2>
+                <div class="relative w-full h-64 flex justify-center">
+                    <canvas id="catChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-700 mb-4 text-center">🎭 สาเหตุทางอารมณ์ (Emotional Triggers)</h2>
+                <div class="relative w-full h-64">
+                    <canvas id="moodChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Table -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 class="text-lg font-bold text-slate-700 mb-4">📝 ประวัติการบันทึกรายการล่าสุด</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 border-b text-slate-600 text-sm">
+                            <th class="p-3">เวลา</th>
+                            <th class="p-3">ประเภท</th>
+                            <th class="p-3">ข้อความ</th>
+                            <th class="p-3">จำนวนเงิน</th>
+                            <th class="p-3">หมวดหมู่</th>
+                            <th class="p-3">อารมณ์/สาเหตุ</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-sm">
+                        {% for log in expenses %}
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-3 text-slate-400">{{ log.created_at|date:"d/m/Y H:i" }}</td>
+                            <td class="p-3">
+                                {% if log.transaction_type == 'Income' %}
+                                <span class="bg-green-100 text-green-700 text-xs px-2.5 py-1 rounded-full font-medium">รายรับ</span>
+                                {% else %}
+                                <span class="bg-red-100 text-red-700 text-xs px-2.5 py-1 rounded-full font-medium">รายจ่าย</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-3 font-medium text-slate-700">{{ log.text }}</td>
+                            <td class="p-3 font-bold {% if log.transaction_type == 'Income' %}text-green-600{% else %}text-red-600{% endif %}">
+                                {{ log.amount|floatformat:2 }} THB
+                            </td>
+                            <td class="p-3"><span class="bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded">{{ log.category }}</span></td>
+                            <td class="p-3"><span class="bg-amber-50 text-amber-700 text-xs px-2 py-1 rounded">{{ log.trigger_mood }}</span></td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="p-4 text-center text-slate-400">ยังไม่มีข้อมูล</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Chart Scripts -->
+    <script>
+        // 1. กราฟเส้นแนวโน้ม 7 วัน
+        const expenseCanvas = document.getElementById('expenseChart');
+        if (expenseCanvas) {
+            const chartDates = {% if chart_dates %}{{ chart_dates|safe }}{% else %}[]{% endif %};
+            const chartTotals = {% if chart_totals %}{{ chart_totals|safe }}{% else %}[]{% endif %};
+
+            new Chart(expenseCanvas.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: chartDates,
+                    datasets: [{
+                        label: 'ยอดใช้จ่าย (บาท)',
+                        data: chartTotals,
+                        borderColor: '#0288D1',
+                        backgroundColor: 'rgba(2, 136, 209, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        // 2. กราฟโดนัทหมวดหมู่
+        const catCanvas = document.getElementById('catChart');
+        if (catCanvas) {
+            const catData = {% if cat_summary_json %}{{ cat_summary_json|safe }}{% else %}[]{% endif %};
+            new Chart(catCanvas, {
+                type: 'doughnut',
+                data: {
+                    labels: catData.map(item => item.category),
+                    datasets: [{
+                        data: catData.map(item => item.total),
+                        backgroundColor: ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        // 3. กราฟแท่งอารมณ์/สาเหตุ
+        const moodCanvas = document.getElementById('moodChart');
+        if (moodCanvas) {
+            const moodData = {% if mood_summary_json %}{{ mood_summary_json|safe }}{% else %}[]{% endif %};
+            new Chart(moodCanvas, {
+                type: 'bar',
+                data: {
+                    labels: moodData.map(item => item.trigger_mood),
+                    datasets: [{
+                        label: 'ยอดรวม (บาท)',
+                        data: moodData.map(item => item.total),
+                        backgroundColor: '#F97316'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>
